@@ -43,39 +43,39 @@ llm = get_llm()
 
 # === Emotion Classifier (Local) ===
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "goemotions"))
+FALLBACK_MODEL = "SamLowe/roberta-base-go_emotions"
 
-# Initialize with simpler parameters (no device_map)
+# Initialize with return_all_scores=True to get all emotion scores
 def get_emotion_classifier():
     print("Loading emotion classifier...")
     start_time = time.time()
     
     try:
-        # Simpler initialization without device_map
+        # Try loading local model first with return_all_scores=True
         classifier = pipeline(
             task="text-classification",
             model=model_path,
             tokenizer=model_path,
-            top_k=1
+            return_all_scores=True  # Get scores for all emotions
         )
         
         # Warm up with a simple example
         _ = classifier("This is a warm-up text")
-        print(f"Emotion classifier loaded in {time.time() - start_time:.2f} seconds")
+        print(f"Local emotion classifier loaded in {time.time() - start_time:.2f} seconds")
         return classifier
     except Exception as e:
-        print(f"Error initializing classifier: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error initializing local classifier: {e}")
         
-        # Fallback to direct HuggingFace model
+        # Fallback to specified HuggingFace model
         try:
-            print("Attempting to load from HuggingFace...")
+            print(f"Attempting to load fallback model: {FALLBACK_MODEL}")
+            fallback_start = time.time()
             classifier = pipeline(
                 task="text-classification",
-                model="SamLowe/roberta-base-go_emotions",
-                top_k=1
+                model=FALLBACK_MODEL,
+                return_all_scores=True  # Get scores for all emotions
             )
-            print("Successfully loaded from HuggingFace")
+            print(f"Successfully loaded fallback model in {time.time() - fallback_start:.2f} seconds")
             return classifier
         except Exception as e2:
             print(f"Fallback also failed: {e2}")
@@ -84,7 +84,12 @@ def get_emotion_classifier():
             class DummyClassifier:
                 def __call__(self, text, **kwargs):
                     print("Using dummy classifier")
-                    return [{"label": "neutral", "score": 1.0}]
+                    return [[
+                        {"label": "neutral", "score": 0.7},
+                        {"label": "joy", "score": 0.1},
+                        {"label": "sadness", "score": 0.1},
+                        {"label": "anger", "score": 0.1}
+                    ]]
             
             return DummyClassifier()
 
@@ -93,32 +98,61 @@ emotion_classifier = get_emotion_classifier()
 
 # === LangGraph Functions ===
 def analyze_emotion(user_input):
-    """Safely analyze the emotion in text."""
+    """Analyze emotions in text and return top emotions with scores."""
     try:
-        # Ensure we're passing a string
-        if isinstance(user_input, dict) and 'content' in user_input:
-            text = user_input['content']
-        elif hasattr(user_input, 'content'):
-            text = user_input.content
+        # Check if user_input is a list containing dictionaries
+        if isinstance(user_input, list) and len(user_input) > 0 and isinstance(user_input[0], dict):
+            # Extract text from the first dictionary
+            text = user_input[0].get('text', '')
         else:
             text = str(user_input)
+
+        print(f"text type {type(user_input)}")
         
         # Truncate very long inputs to avoid tokenizer issues
-        text = text[:1000] if len(text) > 1000 else text
+        original_length = len(text)
+        if original_length > 1000:
+            text = text[:1000]
+            print(f"Truncated input from {original_length} to 1000 chars")
         
-        # Get prediction
-        prediction = emotion_classifier(text)
+        # Print the input text (truncated for display if very long)
+        display_text = text if len(text) < 100 else text[:97] + "..."
+        print(f"\n=== EMOTION ANALYSIS INPUT ===\n{display_text}\n===============================")
         
-        # Extract the emotion label
-        if isinstance(prediction, list) and len(prediction) > 0:
-            if isinstance(prediction[0], dict) and 'label' in prediction[0]:
-                return prediction[0]['label']
-            elif isinstance(prediction[0], list) and len(prediction[0]) > 0:
-                return prediction[0][0]['label']
+        # Get prediction with all scores
+        predictions = emotion_classifier(text)
         
+        # Extract and sort emotions by score
+        if isinstance(predictions, list) and len(predictions) > 0:
+            # Most common format: list with one item containing all emotion scores
+            if isinstance(predictions[0], list) and len(predictions[0]) > 0:
+                # Sort by score (highest first)
+                sorted_emotions = sorted(predictions[0], key=lambda x: x['score'], reverse=True)
+                
+                # Get top 5 emotions with scores
+                top_emotions = sorted_emotions[:5]
+                
+                # Display top emotions with scores
+                emotion_details = "\n".join([f"  {e['label']}: {e['score']:.4f}" for e in top_emotions])
+                print(f"Top emotions:\n{emotion_details}")
+                
+                # Return the top emotion label
+                return top_emotions[0]['label']
+            
+            # Alternative format: each prediction is a dict with label/score
+            elif isinstance(predictions[0], dict) and 'label' in predictions[0]:
+                sorted_emotions = sorted(predictions, key=lambda x: x['score'], reverse=True)
+                top_emotions = sorted_emotions[:5]
+                emotion_details = "\n".join([f"  {e['label']}: {e['score']:.4f}" for e in top_emotions])
+                print(f"Top emotions:\n{emotion_details}")
+                return sorted_emotions[0]['label']
+        
+        print("No valid emotion predictions found, defaulting to neutral")
         return "neutral"
     except Exception as e:
         print(f"Error analyzing emotion: {e}")
+        import traceback
+        traceback.print_exc()
         return "neutral"
 
 def should_continue(state: MessagesState) -> str:
@@ -139,7 +173,7 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     
     # Get emotion and create system message
     detected_emotion = analyze_emotion(user_input)
-    print(f"Detected emotion: {detected_emotion}")
+    print(f"Primary detected emotion: {detected_emotion}")
 
     system_message = (
         f"You are Sei, a thoughtful, compassionate AI therapist. "
