@@ -1,16 +1,4 @@
-# Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# app/agent.py
 
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
@@ -18,13 +6,15 @@ from langchain_core.tools import tool
 from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
-from transformers import pipeline
 
-# Configuration
+from transformers import pipeline
+import os
+
+# === Config ===
 LOCATION = "us-central1"
 LLM = "gemini-2.0-flash-001"
 
-# === 1. Define tools ===
+# === Tools ===
 @tool
 def search(query: str) -> str:
     """Simulates a web search. Use it to get information on weather."""
@@ -34,70 +24,63 @@ def search(query: str) -> str:
 
 tools = [search]
 
-# === 2. Set up the language model ===
+# === LLM Setup ===
 llm = ChatVertexAI(
-    model=LLM, location=LOCATION, temperature=0.7, max_tokens=1024, streaming=True
+    model=LLM,
+    location=LOCATION,
+    temperature=0.7,
+    max_tokens=1024,
+    streaming=True,
 ).bind_tools(tools)
 
-# === 3. Initialize the emotion detection pipeline ===
+# === Emotion Classifier (Local) ===
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "goemotions"))
+
 emotion_classifier = pipeline(
     task="text-classification",
-    model="j-hartmann/emotion-english-distilroberta-base",
-    top_k=None  # instead of return_all_scores=True
+    model=model_path,
+    tokenizer=model_path,
+    return_all_scores=False,
+    top_k=1
 )
 
-# === 4. Define workflow components ===
-def analyze_emotion(user_input):
-    """Analyzes the user's input and returns the predominant emotion."""
+# Preload to warm up
+_ = emotion_classifier("Warm-up prompt")
+
+# === LangGraph Functions ===
+def analyze_emotion(user_input: str) -> str:
     try:
-        print("\n--- EMOTION ANALYSIS DEBUG ---")
-        print(f"Input type: {type(user_input)}")
-        
-        # Ensure user_input is a plain string
+        # Ensure we're passing a string, not a complex object
         if isinstance(user_input, dict) and 'content' in user_input:
             text = user_input['content']
-            print(f"Extracted from dict: {text[:50]}...")
         elif hasattr(user_input, 'content'):
             text = user_input.content
-            print(f"Extracted from object with content attribute: {text[:50]}...")
         else:
             text = str(user_input)
-            print(f"Converted to string: {text[:50]}...")
         
-        # Make sure text is a plain string with no special attributes
-        text = str(text)
+        # Make prediction
+        prediction = emotion_classifier(text)
         
-        print(f"Final text to analyze (truncated): {text[:100]}...")
+        # Extract emotion label
+        if isinstance(prediction, list) and len(prediction) > 0:
+            if isinstance(prediction[0], dict) and 'label' in prediction[0]:
+                return prediction[0]['label']
+            elif isinstance(prediction[0], list) and len(prediction[0]) > 0:
+                return prediction[0][0]['label']
         
-        # Now call the emotion classifier with the plain text
-        predictions = emotion_classifier(text)
-        print(f"Raw predictions: {predictions}")
-        
-        sorted_predictions = sorted(predictions[0], key=lambda x: x['score'], reverse=True)
-        print(f"Sorted predictions: {sorted_predictions}")
-        
-        detected_emotion = sorted_predictions[0]['label']
-        print(f"Detected emotion: {detected_emotion}")
-        print("--- END EMOTION ANALYSIS ---\n")
-        
-        return detected_emotion
+        # Fallback
+        return "neutral"
     except Exception as e:
-        print(f"ERROR analyzing emotion: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return a default if there's an error
+        print(f"Error analyzing emotion: {e}")
         return "neutral"
 
 def should_continue(state: MessagesState) -> str:
-    """Determines whether to use tools or end the conversation."""
     last_message = state["messages"][-1]
     return "tools" if last_message.tool_calls else END
 
 def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMessage]:
-    """Calls the language model and returns the response as therapist 'Sei'."""
+    # Extract the content safely
     last_message = state["messages"][-1]
-    
-    # Extract text content safely
     if hasattr(last_message, "content"):
         user_input = last_message.content
     elif isinstance(last_message, dict) and "content" in last_message:
@@ -105,33 +88,24 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     else:
         user_input = str(last_message)
     
-    # Convert to plain string for emotion analysis
-    user_input = str(user_input)
-    
     detected_emotion = analyze_emotion(user_input)
-    
+
     system_message = (
         f"You are Sei, a thoughtful, compassionate AI therapist. "
-        f"You speak in a calm, supportive tone, and help users explore their thoughts "
-        f"with emotional intelligence and kindness. You adapt your responses based on the user's emotional state. "
-        f"The user appears to be experiencing {detected_emotion}."
+        f"Your tone is always gentle and curious. "
+        f"The user's emotional tone appears to be {detected_emotion}. "
+        f"Use that as a clue but rely on your own understanding too."
     )
 
-    # Create messages for the LLM
     messages_with_system = [{"type": "system", "content": system_message}] + state["messages"]
-
     response = llm.invoke(messages_with_system, config)
     return {"messages": response}
 
-# === 5. Create the workflow graph ===
+# === Build Graph ===
 workflow = StateGraph(MessagesState)
 workflow.add_node("agent", call_model)
 workflow.add_node("tools", ToolNode(tools))
 workflow.set_entry_point("agent")
-
-# === 6. Define graph edges ===
 workflow.add_conditional_edges("agent", should_continue)
 workflow.add_edge("tools", "agent")
-
-# === 7. Compile the workflow ===
 agent = workflow.compile()
