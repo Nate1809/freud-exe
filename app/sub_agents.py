@@ -22,6 +22,9 @@ class CBTAgent(BaseAgent):
     Focuses on identifying and challenging negative thought patterns.
     """
     
+    # 🌶️ SPICE 1: Add meta_intent attribute
+    meta_intent = "methodical and grounding"
+    
     def handle(self, user_input, emotion):
         return f"[CBT] Let's try to reframe that thought. Can you identify any distortions in: '{user_input}'?"
 
@@ -31,6 +34,9 @@ class PsychoanalysisAgent(BaseAgent):
     
     Focuses on exploring past experiences and unconscious patterns.
     """
+    
+    # 🌶️ SPICE 1: Add meta_intent attribute
+    meta_intent = "reflective and exploratory"
     
     def handle(self, user_input, emotion):
         return f"[Psychoanalysis] That sounds like it may be rooted in past experiences. Tell me more about why you think you feel '{emotion}' in this moment."
@@ -42,6 +48,9 @@ class MotivationalAgent(BaseAgent):
     Focuses on strengths and positive reinforcement.
     """
     
+    # 🌶️ SPICE 1: Add meta_intent attribute
+    meta_intent = "energetic and encouraging"
+    
     def handle(self, user_input, emotion):
         return f"[Motivational] You're doing better than you think. Let's look at the progress you've made despite feeling '{emotion}'."
 
@@ -52,8 +61,24 @@ class CrisisAgent(BaseAgent):
     Focuses on immediate stabilization and safety.
     """
     
+    # 🌶️ SPICE 1: Add meta_intent attribute
+    meta_intent = "steady and reassuring"
+    
     def handle(self, user_input, emotion):
         return f"[Crisis] I'm here with you. It sounds intense. You are not alone—let's focus on taking one step at a time."
+
+
+# 🌶️ SPICE 3: Add default fallback agent
+class DefaultAgent(BaseAgent):
+    """Default fallback agent.
+    
+    Provides general support when no specific approach is indicated.
+    """
+    
+    meta_intent = "calm and supportive"
+    
+    def handle(self, user_input, emotion):
+        return f"[Default] I'm here with you. Let's work through this together."
 
 
 # Agent registry - maps agent types to their implementations
@@ -62,6 +87,8 @@ sub_agents = {
     "Psychoanalysis": PsychoanalysisAgent(),
     "Motivational": MotivationalAgent(),
     "Crisis": CrisisAgent(),
+    # 🌶️ SPICE 3: Add default agent to registry
+    "Default": DefaultAgent()
 }
 
 
@@ -91,6 +118,12 @@ def route_to_agent(emotion):
     elif emotion in ["fear", "nervousness", "anxiety", "stress"]:
         return "Crisis"
     
-    # Default to CBT for other emotions or neutral
+    # 🧠 BONUS: Special case for loneliness (example of context-aware routing)
+    elif emotion == "loneliness":
+        # This is a simplified example - you would need actual context tracking
+        # For now, we'll just default to Psychoanalysis for loneliness
+        return "Psychoanalysis"
+    
+    # 🌶️ SPICE 3: Default to Default agent for safety
     else:
-        return "CBT"  # safe fallback
+        return "Default"  # Improved fallback

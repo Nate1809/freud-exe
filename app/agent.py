@@ -228,15 +228,22 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     
     # Route to appropriate sub-agent based on emotion
     selected_agent_key = route_to_agent(detected_emotion)
-    print(f"Routing to: {selected_agent_key} agent")
     sub_agent = sub_agents[selected_agent_key]
+    
+    # 🌶️ SPICE 1: Get meta_intent from sub-agent if available
+    meta_intent = getattr(sub_agent, "meta_intent", "gentle and curious")
+    
+    # 🌶️ SPICE 2: Add smart logging of emotion → agent → intent
+    print(f"Routing: emotion='{detected_emotion}' → agent='{selected_agent_key}' (meta_intent='{meta_intent}')")
+    
+    # Get response from sub-agent
     sub_response = sub_agent.handle(clean_text, detected_emotion)
 
+    # 🌶️ SPICE 1: Inject meta_intent into Sei's system prompt
     system_message = (
         f"You are Sei, a thoughtful, compassionate AI therapist. "
-        f"Your tone is always gentle and curious. "
-        f"The user's emotional tone appears to be {detected_emotion}. "
-        f"Your internal reasoning should incorporate: '{sub_response}'"
+        f"Your tone is always {meta_intent}. "
+        f"Your internal reasoning should incorporate this perspective: '{sub_response}'"
     )
 
     # Create messages for the LLM
