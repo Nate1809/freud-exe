@@ -4,6 +4,10 @@ import os
 # Set environment variable to disable tokenizers parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+import time
+import functools
+from typing import Dict, List, Any, Optional, Union
+
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -12,7 +16,9 @@ from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from transformers import pipeline
-import time
+
+# === Sub-agents and routing ===
+from app.sub_agents import sub_agents, route_to_agent
 
 # === Config ===
 LOCATION = "us-central1"
@@ -45,7 +51,9 @@ llm = get_llm()
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "goemotions"))
 FALLBACK_MODEL = "SamLowe/roberta-base-go_emotions"
 
-# Initialize with return_all_scores=True to get all emotion scores
+# Cache for emotion analysis results to avoid reprocessing identical inputs
+emotion_cache = {}
+
 def get_emotion_classifier():
     print("Loading emotion classifier...")
     start_time = time.time()
@@ -96,18 +104,53 @@ def get_emotion_classifier():
 # Global classifier instance
 emotion_classifier = get_emotion_classifier()
 
-# === LangGraph Functions ===
-def analyze_emotion(user_input):
-    """Analyze emotions in text and return top emotions with scores."""
-    try:
-        # Check if user_input is a list containing dictionaries
-        if isinstance(user_input, list) and len(user_input) > 0 and isinstance(user_input[0], dict):
-            # Extract text from the first dictionary
-            text = user_input[0].get('text', '')
-        else:
-            text = str(user_input)
+# === Helper Function for Text Extraction ===
+def extract_text(user_input: Union[str, List, Dict]) -> str:
+    """Extract text content from various input formats.
+    
+    Args:
+        user_input: Input in various possible formats
+        
+    Returns:
+        Extracted text as string
+    """
+    # Handle list of dictionaries format
+    if isinstance(user_input, list) and len(user_input) > 0:
+        if isinstance(user_input[0], dict):
+            if 'text' in user_input[0]:
+                return user_input[0]['text']
+            elif 'content' in user_input[0]:
+                return user_input[0]['content']
+    
+    # Handle dictionary format
+    if isinstance(user_input, dict):
+        if 'text' in user_input:
+            return user_input['text']
+        elif 'content' in user_input:
+            return user_input['content']
+    
+    # Default case: convert to string
+    return str(user_input)
 
-        print(f"text type {type(user_input)}")
+# === LangGraph Functions ===
+def analyze_emotion(user_input: Union[str, List[Dict[str, Any]]]) -> str:
+    """Analyze emotions in text and return top emotions with scores.
+    
+    Args:
+        user_input: Either a string or a list containing dictionaries with text
+        
+    Returns:
+        The top emotion label as a string
+    """
+    try:
+        # Extract text using the shared helper function
+        text = extract_text(user_input)
+        
+        # Check cache for this exact text (can save significant processing time)
+        if text in emotion_cache:
+            cached_emotion = emotion_cache[text]
+            print(f"Cache hit! Returning cached emotion: {cached_emotion}")
+            return cached_emotion
         
         # Truncate very long inputs to avoid tokenizer issues
         original_length = len(text)
@@ -136,8 +179,10 @@ def analyze_emotion(user_input):
                 emotion_details = "\n".join([f"  {e['label']}: {e['score']:.4f}" for e in top_emotions])
                 print(f"Top emotions:\n{emotion_details}")
                 
-                # Return the top emotion label
-                return top_emotions[0]['label']
+                # Cache and return the top emotion label
+                top_emotion = top_emotions[0]['label']
+                emotion_cache[text] = top_emotion
+                return top_emotion
             
             # Alternative format: each prediction is a dict with label/score
             elif isinstance(predictions[0], dict) and 'label' in predictions[0]:
@@ -145,7 +190,10 @@ def analyze_emotion(user_input):
                 top_emotions = sorted_emotions[:5]
                 emotion_details = "\n".join([f"  {e['label']}: {e['score']:.4f}" for e in top_emotions])
                 print(f"Top emotions:\n{emotion_details}")
-                return sorted_emotions[0]['label']
+                
+                top_emotion = sorted_emotions[0]['label']
+                emotion_cache[text] = top_emotion
+                return top_emotion
         
         print("No valid emotion predictions found, defaulting to neutral")
         return "neutral"
@@ -171,15 +219,24 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     else:
         user_input = str(last_message)
     
-    # Get emotion and create system message
+    # Get emotion and route to appropriate sub-agent
     detected_emotion = analyze_emotion(user_input)
     print(f"Primary detected emotion: {detected_emotion}")
+    
+    # Extract clean text version for sub-agent
+    clean_text = extract_text(user_input)
+    
+    # Route to appropriate sub-agent based on emotion
+    selected_agent_key = route_to_agent(detected_emotion)
+    print(f"Routing to: {selected_agent_key} agent")
+    sub_agent = sub_agents[selected_agent_key]
+    sub_response = sub_agent.handle(clean_text, detected_emotion)
 
     system_message = (
         f"You are Sei, a thoughtful, compassionate AI therapist. "
         f"Your tone is always gentle and curious. "
         f"The user's emotional tone appears to be {detected_emotion}. "
-        f"Use that as a clue but rely on your own understanding too."
+        f"Your internal reasoning should incorporate: '{sub_response}'"
     )
 
     # Create messages for the LLM
