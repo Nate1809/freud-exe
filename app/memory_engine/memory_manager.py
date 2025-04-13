@@ -25,10 +25,10 @@ class MemoryManager:
     long_term_memory: Dict[str, List[MemoryEntry]] = {}
 
     @classmethod
-    def update_rolling_memory(cls, user_id: str, message: str) -> None:
-        """Append a raw message to the user's rolling memory."""
-        cls.rolling_memory.setdefault(user_id, []).append(message)
-        print(f"[MemoryManager] Updated rolling memory for user '{user_id}'. Total messages: {len(cls.rolling_memory[user_id])}")
+    def update_rolling_memory(cls, user_id: str, message) -> None:
+        text = extract_text(message)
+        cls.rolling_memory.setdefault(user_id, []).append(text)
+        print(f"[MemoryManager] Rolling memory updated. Message stored as: {text}")
 
     @classmethod
     def update_session_memory(cls, user_id: str, session_summary: str) -> None:

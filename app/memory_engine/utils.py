@@ -2,17 +2,17 @@
 
 from typing import Union, List, Dict, Any
 
-def extract_text(user_input: Union[str, List, Dict[str, Any]]) -> str:
-    """Extract text content from various input formats."""
-    if isinstance(user_input, list) and user_input:
-        if isinstance(user_input[0], dict):
-            if 'text' in user_input[0]:
-                return user_input[0]['text']
-            elif 'content' in user_input[0]:
-                return user_input[0]['content']
-    if isinstance(user_input, dict):
-        if 'text' in user_input:
-            return user_input['text']
-        elif 'content' in user_input:
-            return user_input['content']
-    return str(user_input)
+from langchain_core.messages import BaseMessage
+
+def extract_text(user_input):
+    if isinstance(user_input, BaseMessage):
+        return user_input.text()
+    elif isinstance(user_input, dict):
+        return user_input.get('text') or user_input.get('content') or str(user_input)
+    elif isinstance(user_input, list):
+        texts = [extract_text(item) for item in user_input]
+        return ' '.join(texts)
+    elif isinstance(user_input, str):
+        return user_input
+    else:
+        return str(user_input)
