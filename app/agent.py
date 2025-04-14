@@ -23,6 +23,7 @@ from app.sub_agents import sub_agents, route_to_agent
 from app.memory_engine.memory_manager import MemoryManager
 from app.memory_engine.memory_summarizer import MemorySummarizer
 from app.memory_engine.context_injector import ContextInjector
+from app.memory_engine.memory_retriever import MemoryRetriever  # Add this line
 
 # === Config ===
 LOCATION = "us-central1"
@@ -163,6 +164,10 @@ def should_continue(state: MessagesState) -> str:
     return END
 
 
+# Updated code for the call_model function in agent.py
+
+# This is an updated section for your call_model function in agent.py
+
 def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMessage]:
     # Extract user input
     last_message = state["messages"][-1]
@@ -178,38 +183,63 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     # For demonstration, we're using a fixed user_id.
     user_id = "user_123"
 
-    # Update rolling memory with the new message.
-    MemoryManager.update_rolling_memory(user_id, user_input)
+    # Clean and extract text
+    clean_text = extract_text(user_input)
     
-    # Check if we need to summarize the conversation.
+    # Update rolling memory with the new message
+    MemoryManager.update_rolling_memory(user_id, clean_text)
+    
+    # CHANGE: Evaluate EACH message for memory significance
+    print("[Agent] Evaluating current message for memory significance...")
+    message_evaluation = MemorySummarizer.evaluate_memory(clean_text)
+    
+    if message_evaluation and message_evaluation['is_significant']:
+        print(f"[Agent] Message deemed significant: {message_evaluation['reasoning']}")
+        memory_summary = message_evaluation['summary']
+        memory_tags = message_evaluation['tags']
+        
+        # Store the significant memory
+        MemoryManager.append_long_term(user_id, memory_summary, memory_tags)
+        print(f"[Agent] Added significant memory: {memory_summary} with tags {memory_tags}")
+    else:
+        print("[Agent] Current message not deemed significant enough for long-term memory")
+    
+    # Still keep the periodic summarization, but with a lower threshold
     rolling_history = MemoryManager.rolling_memory.get(user_id, [])
-    summary = MemorySummarizer.summarize_if_needed(rolling_history)
+    summary = MemorySummarizer.summarize_if_needed(rolling_history, threshold=5)  # Lower threshold
     if summary:
         MemoryManager.update_session_memory(user_id, summary)
-        if MemorySummarizer.is_significant(summary):
-            tags = MemorySummarizer.tag_emotions(summary)
-            MemoryManager.append_long_term(user_id, summary, tags)
     
-    # Retrieve combined memory context
-    combined_context = MemoryManager.get_combined_context(user_id)
-    
-    # Analyze emotion and route to appropriate sub-agent.
+    # Analyze emotion and route to appropriate sub-agent
     detected_emotion = analyze_emotion(user_input)
     print(f"[Agent] Primary detected emotion: {detected_emotion}")
     
-    clean_text = extract_text(user_input)
     selected_agent_key = route_to_agent(detected_emotion)
     sub_agent = sub_agents[selected_agent_key]
     meta_intent = getattr(sub_agent, "meta_intent", "gentle and curious")
     print(f"[Agent] Routing: emotion='{detected_emotion}' → agent='{selected_agent_key}' (meta_intent='{meta_intent}')")
     sub_response = sub_agent.handle(clean_text, detected_emotion)
     
-    # Build the system prompt with memory context.
+    # Retrieve relevant memories for this conversation
+    try:
+        relevant_memories = MemoryRetriever.get_relevant_memories(
+            user_id=user_id,
+            current_message=clean_text
+        )
+    except Exception as e:
+        print(f"[Agent] Error retrieving relevant memories: {e}")
+        relevant_memories = []
+    
+    # Build the system prompt with relevant memories and other context
+    session_context = MemoryManager.get_combined_context(user_id)
+    
     system_message = ContextInjector.build(
         meta_intent=meta_intent,
         agent_guidance=sub_response,
-        session_summary=combined_context,
-        long_term_facts=None,
+        user_id=user_id,
+        current_message=clean_text,
+        session_summary=session_context,
+        relevant_memories=relevant_memories,
         additional_context=None,
     )
     
