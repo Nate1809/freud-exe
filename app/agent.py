@@ -214,7 +214,9 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     )
     
     messages_with_system = [{"type": "system", "content": system_message}] + state["messages"]
-    print("[Agent] Final system prompt constructed. Passing to LLM...")
+    print("\n🧠 === FINAL SYSTEM PROMPT TO LLM === 🧠\n")
+    print(system_message)
+    print("\n🧠 ================================ 🧠\n")
     response = llm.invoke(messages_with_system, config)
     return {"messages": response}
 
