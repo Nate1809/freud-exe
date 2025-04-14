@@ -2,7 +2,7 @@
 import json
 import os
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 from app.memory_engine.utils import extract_text
 
@@ -11,7 +11,8 @@ class MemoryEntry:
     """Represents a single long-term memory entry."""
     summary: str
     tags: List[str] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    reasoning_history: List[Dict[str, str]] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to a dictionary for JSON serialization."""
@@ -27,6 +28,13 @@ class MemoryEntry:
         if isinstance(data['timestamp'], str):
             data['timestamp'] = datetime.fromisoformat(data['timestamp'])
         return cls(**data)
+    
+    @property
+    def reasoning(self) -> str:
+        """Get the most recent reasoning, if available."""
+        if not self.reasoning_history:
+            return "No reasoning provided."
+        return self.reasoning_history[-1]["text"]
 
 class MemoryManager:
     """
@@ -106,21 +114,48 @@ class MemoryManager:
             print(f"[MemoryManager] Error saving memories for user '{user_id}': {e}")
     
     @classmethod
-    def append_long_term(cls, user_id: str, summary: str, tags: Optional[List[str]] = None) -> None:
-        """Append a significant summary to the long-term memory with optional tags."""
+    def append_long_term(cls, user_id: str, summary: str, tags: Optional[List[str]] = None, reasoning: Optional[str] = None) -> None:
+        """Append a significant summary to the long-term memory with optional tags and reasoning."""
         if tags is None:
             tags = []
         
         # Load existing memories (this populates the cache if needed)
         cls._load_long_term_memories(user_id)
         
+        # Create reasoning history
+        reasoning_history = []
+        if reasoning:
+            reasoning_history.append({
+                "text": reasoning,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        
         # Create and append the new memory
-        entry = MemoryEntry(summary=summary, tags=tags)
+        entry = MemoryEntry(
+            summary=summary, 
+            tags=tags, 
+            reasoning_history=reasoning_history
+        )
         cls._long_term_memory_cache.setdefault(user_id, []).append(entry)
         
         # Save to disk
         cls._save_long_term_memories(user_id)
-        print(f"[MemoryManager] Long-term memory appended for user '{user_id}': '{summary}'. Tags: {tags}")
+        print(f"[MemoryManager] Long-term memory appended for user '{user_id}': '{summary}'. Tags: {tags}. Reason: {reasoning}")
+    
+    @classmethod
+    def save_updated_memory(cls, user_id: str, memory_index: int, updated_memory: MemoryEntry) -> None:
+        """Update an existing memory and save to disk."""
+        memories = cls._load_long_term_memories(user_id)
+        if 0 <= memory_index < len(memories):
+            # Replace the memory at the specified index
+            memories[memory_index] = updated_memory
+            # Update the cache
+            cls._long_term_memory_cache[user_id] = memories
+            # Save to disk
+            cls._save_long_term_memories(user_id)
+            print(f"[MemoryManager] Updated memory at index {memory_index} for user '{user_id}'")
+        else:
+            print(f"[MemoryManager] Error: Invalid memory index {memory_index} for user '{user_id}'")
     
     @classmethod
     def get_long_term_memories(cls, user_id: str) -> List[MemoryEntry]:
@@ -130,14 +165,11 @@ class MemoryManager:
     @classmethod
     def get_combined_context(cls, user_id: str) -> str:
         """
-        Construct a combined context string that includes:
-          - The last three rolling messages.
-          - All session summaries.
-          - A formatted view of the long-term memories.
+        Constructs session + rolling memory (excluding long-term memory).
         """
         context_parts = []
 
-        # Include up to the last 3 messages from rolling memory
+        # Recent messages
         rolling = cls.rolling_memory.get(user_id, [])
         if rolling:
             recent = rolling[-3:]
@@ -145,20 +177,11 @@ class MemoryManager:
             context_parts.append("Recent Messages:\n" + "\n".join(recent_strings))
             print(f"[MemoryManager] Retrieved {len(recent)} recent messages for user '{user_id}'.")
 
-        # Include all session summaries
+        # Session summaries
         sessions = cls.session_memory.get(user_id, [])
         if sessions:
             context_parts.append("Session Summaries:\n" + "\n".join(sessions))
             print(f"[MemoryManager] Retrieved {len(sessions)} session summaries for user '{user_id}'.")
-
-        # Include all long-term memory entries
-        long_terms = cls._load_long_term_memories(user_id)
-        if long_terms:
-            long_term_text = "Long-Term Memories:\n" + "\n".join(
-                [f"- {entry.summary} (tags: {', '.join(entry.tags)})" for entry in long_terms]
-            )
-            context_parts.append(long_term_text)
-            print(f"[MemoryManager] Retrieved {len(long_terms)} long-term memories for user '{user_id}'.")
 
         combined_context = "\n\n".join(context_parts)
         print(f"[MemoryManager] Combined context built for user '{user_id}':\n{combined_context}\n")

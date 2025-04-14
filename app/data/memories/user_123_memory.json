@@ -1,13 +1,17 @@
 [
   {
-    "summary": "Nate is 26 years old and expresses anxiety and a strong desire for a girlfriend. He repeatedly asks for help in obtaining or finding a girlfriend.",
+    "summary": "Client is feeling anxious about a job interview next week.",
     "tags": [
       "anxiety",
-      "relationships",
-      "loneliness",
-      "desire for intimacy",
-      "help-seeking"
+      "job interview",
+      "future concerns"
     ],
-    "timestamp": "2025-04-14T08:40:07.966182"
+    "timestamp": "2025-04-14T22:02:41.953402+00:00",
+    "reasoning_history": [
+      {
+        "text": "This memory is important because it highlights a specific stressor in the client's life, allowing the therapist to explore the roots of the anxiety and develop coping strategies. It also provides an opportunity to address potential performance anxiety or self-doubt issues.",
+        "timestamp": "2025-04-14T22:02:43.337198+00:00"
+      }
+    ]
   }
 ]
