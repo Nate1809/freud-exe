@@ -13,5 +13,79 @@
         "timestamp": "2025-04-14T22:02:43.337198+00:00"
       }
     ]
+  },
+  {
+    "summary": "Client is asking the therapist to recall the reasons behind their anxiety.",
+    "tags": [
+      "anxiety",
+      "memory",
+      "therapy process"
+    ],
+    "timestamp": "2025-04-15T01:15:47.467544+00:00",
+    "reasoning_history": [
+      {
+        "text": "This memory is important because it indicates the client is seeking understanding and validation of their anxiety, potentially revealing a desire to connect past experiences with present feelings in therapy. It also highlights the client's active engagement in the therapeutic process and their willingness to explore the roots of their anxiety.",
+        "timestamp": "2025-04-15T01:15:48.852589+00:00"
+      }
+    ]
+  },
+  {
+    "summary": "Client states their name is Bathe and they are 26 years old.",
+    "tags": [
+      "personal information",
+      "age"
+    ],
+    "timestamp": "2025-04-15T01:16:29.665237+00:00",
+    "reasoning_history": [
+      {
+        "text": "This memory is crucial for basic identification and establishing rapport, ensuring the therapist addresses the client correctly and understands their developmental stage. It also provides a foundation for tracking progress and contextualizing the client's experiences within their age group.",
+        "timestamp": "2025-04-15T01:16:30.469780+00:00"
+      }
+    ]
+  },
+  {
+    "summary": "The client is clarifying that their name is Nate, not Bathe, which was a typo.",
+    "tags": [
+      "identity",
+      "name"
+    ],
+    "timestamp": "2025-04-15T01:16:41.496020+00:00",
+    "reasoning_history": [
+      {
+        "text": "Remembering the client's correct name, Nate, is crucial for building rapport and demonstrating attentiveness, fostering a sense of respect and trust in the therapeutic relationship. This also avoids potential feelings of invalidation or disrespect that could hinder progress.",
+        "timestamp": "2025-04-15T01:16:42.307339+00:00"
+      }
+    ]
+  },
+  {
+    "summary": "The client is asking for advice on how to manage their anxiety.",
+    "tags": [
+      "anxiety",
+      "coping strategies",
+      "help-seeking"
+    ],
+    "timestamp": "2025-04-15T01:17:09.921700+00:00",
+    "reasoning_history": [
+      {
+        "text": "This memory is important because it indicates the client is actively seeking coping strategies, highlighting a potential teachable moment for the therapist to introduce evidence-based techniques and empower the client in their anxiety management. It also reveals the client's perceived lack of control over their anxiety, which can be further explored in therapy.",
+        "timestamp": "2025-04-15T01:17:12.270537+00:00"
+      }
+    ]
+  },
+  {
+    "summary": "The client is requesting the AI therapist to be more compassionate and human-like.",
+    "tags": [
+      "therapeutic relationship",
+      "compassion",
+      "AI therapy",
+      "client feedback"
+    ],
+    "timestamp": "2025-04-15T01:18:27.671772+00:00",
+    "reasoning_history": [
+      {
+        "text": "This memory is important because it highlights the client's unmet emotional needs and desire for a stronger therapeutic alliance, suggesting potential areas for exploration and adjustment in the therapist's approach. It also indicates the client may be struggling with feeling understood or validated in the current therapeutic setting.",
+        "timestamp": "2025-04-15T01:18:30.398265+00:00"
+      }
+    ]
   }
 ]

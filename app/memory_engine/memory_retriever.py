@@ -1,32 +1,17 @@
 # memory_retriever.py
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
-from langchain_google_vertexai import ChatVertexAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.memory_engine.memory_manager import MemoryEntry, MemoryManager
 
-# Constants
-LOCATION = "us-central1"
-LLM = "gemini-2.0-flash-001"
+# Import the centralized LLM
+from app.llm import memory_llm
 
 class MemoryRetriever:
     """
     Retrieves relevant memories based on the current conversation context.
     Uses an LLM to determine which memories are most relevant.
     """
-    _llm = None
-    
-    @classmethod
-    def _get_llm(cls):
-        """Lazy initialization of the LLM."""
-        if cls._llm is None:
-            cls._llm = ChatVertexAI(
-                model=LLM,
-                location=LOCATION,
-                temperature=0.2,
-                max_tokens=1024,
-            )
-        return cls._llm
     
     @classmethod
     def should_update_reasoning(cls, reasoning_history: List[Dict[str, str]]) -> bool:
@@ -52,8 +37,6 @@ class MemoryRetriever:
     def generate_reasoning(cls, content: str) -> str:
         """Generate reasoning for why a memory might be important."""
         try:
-            llm = cls._get_llm()
-            
             system_prompt = """
             You are an AI therapist's memory reasoning system. 
             Explain briefly why the following memory might be important for a therapist to remember about their client.
@@ -68,7 +51,7 @@ class MemoryRetriever:
                 HumanMessage(content=human_prompt)
             ]
             
-            response = llm.invoke(messages)
+            response = memory_llm.invoke(messages)
             reasoning = response.content.strip()
             
             print(f"[MemoryRetriever] Generated reasoning: {reasoning}")
@@ -149,8 +132,7 @@ class MemoryRetriever:
             ]
             
             # Get relevance ranking from LLM
-            llm = cls._get_llm()
-            response = llm.invoke(messages)
+            response = memory_llm.invoke(messages)
             
             # Parse the response
             indices = []

@@ -9,12 +9,13 @@ from typing import Dict, List, Any, Optional, Union
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
-from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from transformers import pipeline
-from app.memory_engine.utils import extract_text
 
+# Import the centralized LLM
+from app.llm import llm, get_llm
+from app.memory_engine.utils import extract_text
 
 # === Sub-agents and routing ===
 from app.sub_agents import sub_agents, route_to_agent
@@ -23,11 +24,7 @@ from app.sub_agents import sub_agents, route_to_agent
 from app.memory_engine.memory_manager import MemoryManager
 from app.memory_engine.memory_summarizer import MemorySummarizer
 from app.memory_engine.context_injector import ContextInjector
-from app.memory_engine.memory_retriever import MemoryRetriever  # Add this line
-
-# === Config ===
-LOCATION = "us-central1"
-LLM = "gemini-2.0-flash-001"
+from app.memory_engine.memory_retriever import MemoryRetriever
 
 # === Tools ===
 @tool
@@ -39,18 +36,8 @@ def search(query: str) -> str:
 
 tools = [search]
 
-# === LLM Setup ===
-def get_llm():
-    return ChatVertexAI(
-        model=LLM,
-        location=LOCATION,
-        temperature=0.7,
-        max_tokens=1024,
-        streaming=True,
-    ).bind_tools(tools)
-
-# Global LLM instance
-llm = get_llm()
+# Bind tools to our centralized LLM instance
+llm_with_tools = get_llm(tools=tools, streaming=True)
 
 # === Emotion Classifier (Local) ===
 import os
@@ -97,21 +84,6 @@ def get_emotion_classifier():
             return DummyClassifier()
 
 emotion_classifier = get_emotion_classifier()
-
-# def extract_text(user_input: Union[str, List, Dict]) -> str:
-#     """Extract text content from various input formats."""
-#     if isinstance(user_input, list) and user_input:
-#         if isinstance(user_input[0], dict):
-#             if 'text' in user_input[0]:
-#                 return user_input[0]['text']
-#             elif 'content' in user_input[0]:
-#                 return user_input[0]['content']
-#     if isinstance(user_input, dict):
-#         if 'text' in user_input:
-#             return user_input['text']
-#         elif 'content' in user_input:
-#             return user_input['content']
-#     return str(user_input)
 
 def analyze_emotion(user_input: Union[str, List[Dict[str, Any]]]) -> str:
     """Analyze emotion in text and return the primary emotion."""
@@ -163,11 +135,6 @@ def should_continue(state: MessagesState) -> str:
         return "tools"
     return END
 
-
-# Updated code for the call_model function in agent.py
-
-# This is an updated section for your call_model function in agent.py
-
 def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMessage]:
     # Extract user input
     last_message = state["messages"][-1]
@@ -182,6 +149,10 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     
     # For demonstration, we're using a fixed user_id.
     user_id = "user_123"
+    
+    # Extract user_id from config if available
+    if config and "configurable" in config and "user_id" in config["configurable"]:
+        user_id = config["configurable"]["user_id"]
 
     # Clean and extract text
     clean_text = extract_text(user_input)
@@ -189,7 +160,7 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     # Update rolling memory with the new message
     MemoryManager.update_rolling_memory(user_id, clean_text)
     
-    # CHANGE: Evaluate EACH message for memory significance
+    # Evaluate EACH message for memory significance
     print("[Agent] Evaluating current message for memory significance...")
     message_evaluation = MemorySummarizer.evaluate_memory(clean_text)
     
@@ -247,7 +218,9 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     print("\n🧠 === FINAL SYSTEM PROMPT TO LLM === 🧠\n")
     print(system_message)
     print("\n🧠 ================================ 🧠\n")
-    response = llm.invoke(messages_with_system, config)
+    
+    # Use the LLM with tools for generating the response
+    response = llm_with_tools.invoke(messages_with_system, config)
     return {"messages": response}
 
 def create_agent():
