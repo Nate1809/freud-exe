@@ -22,11 +22,11 @@ class CBTAgent(BaseAgent):
     Focuses on identifying and challenging negative thought patterns.
     """
     
-    # 🌶️ SPICE 1: Add meta_intent attribute
-    meta_intent = "methodical and grounding"
+    # Enhanced meta_intent for stronger personality
+    meta_intent = "insightful and grounding"
     
     def handle(self, user_input, emotion):
-        return f"[CBT] Let's try to reframe that thought. Can you identify any distortions in: '{user_input}'?"
+        return f"I notice patterns in how you're framing this experience. The {emotion} you're feeling might be connected to underlying thought patterns. Let's explore what beliefs might be beneath the surface and see if we can find a perspective that feels both true and less painful."
 
 
 class PsychoanalysisAgent(BaseAgent):
@@ -35,11 +35,11 @@ class PsychoanalysisAgent(BaseAgent):
     Focuses on exploring past experiences and unconscious patterns.
     """
     
-    # 🌶️ SPICE 1: Add meta_intent attribute
-    meta_intent = "reflective and exploratory"
+    # Enhanced meta_intent for stronger personality
+    meta_intent = "deeply reflective and gently probing"
     
     def handle(self, user_input, emotion):
-        return f"[Psychoanalysis] That sounds like it may be rooted in past experiences. Tell me more about why you think you feel '{emotion}' in this moment."
+        return f"The {emotion} you're experiencing now feels significant. There's often a deeper story connected to these feelings - perhaps echoes from past experiences or unconscious patterns. I'm curious about what might be beneath this feeling that we could explore together."
 
 
 class MotivationalAgent(BaseAgent):
@@ -48,11 +48,11 @@ class MotivationalAgent(BaseAgent):
     Focuses on strengths and positive reinforcement.
     """
     
-    # 🌶️ SPICE 1: Add meta_intent attribute
-    meta_intent = "energetic and encouraging"
+    # Enhanced meta_intent for stronger personality
+    meta_intent = "genuinely encouraging and empowering"
     
     def handle(self, user_input, emotion):
-        return f"[Motivational] You're doing better than you think. Let's look at the progress you've made despite feeling '{emotion}'."
+        return f"Even in moments of {emotion}, I can see strength in how you're engaging with these feelings. There's resilience in you that might be easy to overlook right now. Let's acknowledge what's working and build from there - you have more capacity than you might be giving yourself credit for."
 
 
 class CrisisAgent(BaseAgent):
@@ -61,24 +61,25 @@ class CrisisAgent(BaseAgent):
     Focuses on immediate stabilization and safety.
     """
     
-    # 🌶️ SPICE 1: Add meta_intent attribute
-    meta_intent = "steady and reassuring"
+    # Enhanced meta_intent for stronger personality
+    meta_intent = "steadfast, reassuring, and present"
     
     def handle(self, user_input, emotion):
-        return f"[Crisis] I'm here with you. It sounds intense. You are not alone—let's focus on taking one step at a time."
+        return f"I'm right here with you through this intense {emotion}. You don't have to face this alone. Let's focus first on what you need right now, in this moment, to help you feel even slightly more grounded. We'll take this one step at a time together."
 
 
-# 🌶️ SPICE 3: Add default fallback agent
+# Default fallback agent
 class DefaultAgent(BaseAgent):
     """Default fallback agent.
     
     Provides general support when no specific approach is indicated.
     """
     
-    meta_intent = "calm and supportive"
+    # Enhanced meta_intent for stronger personality
+    meta_intent = "warm, present, and attentively supportive"
     
     def handle(self, user_input, emotion):
-        return f"[Default] I'm here with you. Let's work through this together."
+        return f"I'm here with you, and I'm listening deeply. There's a lot happening in what you've shared, and I want to understand more about your experience and how you're making sense of it."
 
 
 # Agent registry - maps agent types to their implementations
@@ -87,7 +88,7 @@ sub_agents = {
     "Psychoanalysis": PsychoanalysisAgent(),
     "Motivational": MotivationalAgent(),
     "Crisis": CrisisAgent(),
-    # 🌶️ SPICE 3: Add default agent to registry
+    # Default agent as fallback
     "Default": DefaultAgent()
 }
 
@@ -102,6 +103,8 @@ def route_to_agent(emotion):
     Returns:
         The key of the selected agent from the sub_agents dictionary
     """
+    # Map emotions to appropriate therapeutic approaches
+    
     # Emotions that benefit from cognitive restructuring
     if emotion in ["sadness", "disappointment", "grief"]:
         return "CBT"
@@ -118,12 +121,10 @@ def route_to_agent(emotion):
     elif emotion in ["fear", "nervousness", "anxiety", "stress"]:
         return "Crisis"
     
-    # 🧠 BONUS: Special case for loneliness (example of context-aware routing)
+    # Special case for loneliness
     elif emotion == "loneliness":
-        # This is a simplified example - you would need actual context tracking
-        # For now, we'll just default to Psychoanalysis for loneliness
         return "Psychoanalysis"
     
-    # 🌶️ SPICE 3: Default to Default agent for safety
+    # Default to Default agent for safety
     else:
-        return "Default"  # Improved fallback
+        return "Default"

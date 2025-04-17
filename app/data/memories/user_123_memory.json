@@ -87,5 +87,19 @@
         "timestamp": "2025-04-15T01:18:30.398265+00:00"
       }
     ]
+  },
+  {
+    "summary": "Client reports experiencing sudden anxiety.",
+    "tags": [
+      "anxiety",
+      "acute distress"
+    ],
+    "timestamp": "2025-04-17T20:42:25.340995+00:00",
+    "reasoning_history": [
+      {
+        "text": "This memory is important because it highlights a specific symptom that may be central to the client's distress and could indicate an underlying anxiety disorder or trigger. It also provides a starting point for exploring the frequency, intensity, and context of these anxiety episodes in therapy.",
+        "timestamp": "2025-04-17T20:42:26.427900+00:00"
+      }
+    ]
   }
 ]
