@@ -197,6 +197,11 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
             user_id=user_id,
             current_message=clean_text
         )
+        if relevant_memories:
+            memory_indices = [i+1 for i in range(len(relevant_memories))]
+            print(f"[Agent] Retrieved {len(relevant_memories)} relevant memories: {memory_indices}")
+        else:
+            print("[Agent] No relevant memories found")
     except Exception as e:
         print(f"[Agent] Error retrieving relevant memories: {e}")
         relevant_memories = []
@@ -221,6 +226,12 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
     
     # Use the LLM with tools for generating the response
     response = llm_with_tools.invoke(messages_with_system, config)
+    
+    # DEBUG: Print the raw LLM response
+    print("\n🤖 === RAW LLM RESPONSE === 🤖\n")
+    print(response)
+    print("\n🤖 ================================ 🤖\n")
+    
     return {"messages": response}
 
 def create_agent():
